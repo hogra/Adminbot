@@ -27,6 +27,18 @@ def greg(gid, works, keys=None):
     db_sess.add(g)
     db_sess.commit()
 
+def ureg(a, gid, status):
+    u = users.User()
+    u.userid = a['id']
+    u.groupid = gid
+    u.surname = a['last_name']
+    u.name = a['first_name']
+    u.status = status
+    db_sess.add(u)
+    db_sess.commit()
+
+
+
 for event in longpoll.listen():
     if event.type == VkBotEventType.MESSAGE_NEW:
         if event.from_chat:
@@ -39,18 +51,8 @@ for event in longpoll.listen():
                     if msg[1:6] == 'админ':
                         q = event.object.message
                         fromid = q['reply_message']['from_id']
-                        print(fromid)
                         a = vk.users.get(user_id=fromid)[0]
-                        print(a)
-                        u = users.User()
-                        print(a['id'])
-                        u.userid = a['id']
-                        u.groupid = gid
-                        u.surname = a['last_name']
-                        u.name = a['first_name']
-                        u.status = 'админ'
-                        db_sess.add(u)
-                        db_sess.commit()
+                        ureg(a, gid, 'админ')
                     elif msg[1:10] == 'за работу':
                         sender(gid, 'Не стройте из себя дурака, у меня уже есть ваша карточка!')
                     else:
