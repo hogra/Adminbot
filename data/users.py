@@ -8,7 +8,7 @@ class User(SqlAlchemyBase):
     id = sqlalchemy.Column(sqlalchemy.Integer,
                            primary_key=True, autoincrement=True)
     userid = sqlalchemy.Column(sqlalchemy.Integer, nullable=True)
-    groupid = sqlalchemy.Column(sqlalchemy.Integer, sqlalchemy.ForeignKey("users")) # foreign key = true
+    groupid = sqlalchemy.Column(sqlalchemy.Integer, sqlalchemy.ForeignKey("group")) # foreign key = true
     surname = sqlalchemy.Column(sqlalchemy.String, nullable=True)
     name = sqlalchemy.Column(sqlalchemy.String, nullable=True)
     status = sqlalchemy.Column(sqlalchemy.String, nullable=True)
