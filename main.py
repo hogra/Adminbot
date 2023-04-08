@@ -37,6 +37,18 @@ def ureg(a, gid, status):
     db_sess.add(u)
     db_sess.commit()
 
+def getadmins(gid):
+    members = vk.messages.getConversationMembers(peer_id=2000000000 + gid)['items']
+    l1 = list()
+    for i in members:
+        try:
+            if i['is_admin']:
+                l1.append(i['member_id'])
+        except KeyError:
+            pass
+        except IndexError:
+            pass
+    return l1
 
 
 for event in longpoll.listen():
@@ -53,6 +65,24 @@ for event in longpoll.listen():
                         fromid = q['reply_message']['from_id']
                         a = vk.users.get(user_id=fromid)[0]
                         ureg(a, gid, 'админ')
+                        sender(gid, f"{a['first_name']} {a['last_name']} назначен админом")
+                    elif msg[1:4] == 'кик':
+                        q = event.object.message
+                        print(q)
+                        if db_sess.query(users.User.status).filter(users.User.userid == q['from_id'], users.User.groupid == gid).first()[0] == 'админ':
+                            if q['from_id'] in getadmins(gid):
+                                vk.messages.removeChatUser(chat_id=gid, user_id=q['reply_message']['from_id'])
+                                sender(gid, 'Готово, этого парня вы больше не встретите')
+                            elif db_sess.query(users.User.status).filter(users.User.userid == q['reply_message']['from_id'], users.User.groupid == gid).first()[0] != 'админ':
+                                vk.messages.removeChatUser(chat_id=gid, user_id=q['reply_message']['from_id'])
+                                sender(gid, 'Готово, этого парня вы больше не встретите')
+                            else:
+                                sender(gid, 'Разбирайтесь со своими проблемами сами, или позовите организатора. Админ не '
+                                       'может кикать админа')
+                        else:
+                            sender(gid, 'У вас нет прав админа для этого действия')
+                        fromid = q['reply_message']['from_id']
+                        a = vk.users.get(user_id=fromid)[0]
                     elif msg[1:10] == 'за работу':
                         sender(gid, 'Не стройте из себя дурака, у меня уже есть ваша карточка!')
                     else:
@@ -62,6 +92,14 @@ for event in longpoll.listen():
             elif msg == '!за работу':
                 if db_sess.query(group.Group).filter(group.Group.groupid == str(gid)).first() is None:
                     greg(gid, True)
+                members = vk.messages.getConversationMembers(peer_id=2000000000 + gid)['items']
+                print(members)
+                for i in members:
+                    for i in getadmins(gid):
+                        a = vk.users.get(user_id=i)[0]
+                        ureg(a, gid, 'админ')
+                        sender(gid, f"{a['first_name']} {a['last_name']} назначен админом")
+                    sender(gid, 'Регистрация окончена')
             else:
                 sender(gid, 'Товарищ, похоже эта беседа не зарегистрирована!\nЧтобы зарегистрировать беседу предоставьте '
                             'боту права администратора, доступ ко всей переписке и напишите команду "!За работу"')
