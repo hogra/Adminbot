@@ -7,12 +7,15 @@ tok = 'vk1.a.PjWas5ZQVRqq08J7YC8pC_AP6N8Fix4r1WYL48t5Df6B3fc2n8NWnx7AgzsABGYS0a1
 vk_session = VkApi(token=tok)
 vk = vk_session.get_api()
 longpoll = VkBotLongPoll(vk_session, 219582896)
-
+DOMENS = ['.com', '.edu', '.fun', '.gov', '.info', '.net', '.org', '.xxx', '.dev', '.ai', '.au', '.az', '.cz', '.eu',
+          '.gg', '.ru', '.рф', '.su']
 
 
 def sender(id, text):
     vk_session.method('messages.send', {'chat_id': id, 'message': text, 'random_id': 0})
 
+def eraser(gid, mid):
+    vk_session.method('messages.delete', {'peer_id': 2000000000 + gid, 'delete_for_all': 1, 'cmids': mid, 'random_id': 0})
 
 db_session.global_init("db/users.db")
 db_session.global_init("db/group.db")
@@ -21,7 +24,6 @@ db_sess = db_session.create_session()
 def greg(gid, works, keys=None):
     g = group.Group()
     g.groupid = gid
-    g.keys = 'None'
     g.works = works
     db_sess = db_session.create_session()
     db_sess.add(g)
@@ -35,6 +37,18 @@ def ureg(a, gid, status):
     u.name = a['first_name']
     u.status = status
     db_sess.add(u)
+    db_sess.commit()
+
+def wreg(a, gid):
+    db_sess = db_session.create_session()
+    g = db_sess.query(group.Group).filter(group.Group.groupid == gid).first()
+    g.words = a
+    db_sess.commit()
+
+def lreg(a, gid):
+    db_sess = db_session.create_session()
+    g = db_sess.query(group.Group).filter(group.Group.groupid == gid).first()
+    g.links = a
     db_sess.commit()
 
 def getadmins(gid):
@@ -57,19 +71,14 @@ for event in longpoll.listen():
             gid = event.chat_id
             msg = event.object.message['text'].lower()
             a = False
-            print(event.chat_id)
-            try:
-                dey = event.message.action['type']
-                invite_id = event.message.action['member_id']
-            except:
-                dey = ''
-                invite_id = -100
+            forbidden = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0]
+            keylinks = db_sess.query(group.Group.links).filter(group.Group.groupid == gid).first()[0]
+            print(forbidden)
+            if forbidden is not None:
+                forbidden = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0].split(',')
+            else:
+                forbidden = []
             if db_sess.query(group.Group).filter(group.Group.groupid == str(gid)).first() is not None and len(msg) > 0:
-                print(dey)
-                gr = db_sess.query(group.Group.greet).filter(group.Group.groupid == gid).first()[0]
-                if dey == 'chat_invite_user':
-                    print(db_sess.query(group.Group.greet).filter(group.Group.groupid == gid).first()[0])
-                    sender(gid, gr)
                 if msg[0] == '!':
                     if msg[1:6] == 'админ':
                         q = event.object.message
@@ -117,8 +126,50 @@ for event in longpoll.listen():
                         db_sess.commit()
                     elif msg[1:10] == 'за работу':
                         sender(gid, 'Не стройте из себя дурака, у меня уже есть ваша карточка!')
+                    elif msg[1:5] == 'ключ':
+                        print(msg[6:10])
+                        if msg[6:11] == 'слово':
+                            word = msg[11:].replace(' ', '')
+                            lst = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0]
+                            if lst is not None:
+                                lst = lst.split(',')
+                                if word in lst:
+                                    lst.remove(word)
+                                    sender(gid, f'Я убрал слово {word} из списка запрещенных слов')
+                                else:
+                                    lst.append(word)
+                                    sender(gid, f'Я добавил слово {word} в список запрещенных слов')
+                            else:
+                                lst = [word]
+                                sender(gid, f'Я добавил слово {word} в список запрещенных слов')
+                            fin = ','.join(lst)
+                            wreg(fin, gid)
+                        elif msg[6:12] == 'ссылки':
+                            if keylinks == 1:
+                                lreg(0, gid)
+                                sender(gid, 'Ссылки теперь разрешены')
+                            else:
+                                lreg(1, gid)
+                                sender(gid, 'Ссылки теперь запрещены')
+                    elif msg[1:2] == '-':
+                        print(event.object.message['reply_message']['conversation_message_id'])
+                        try:
+                            eraser(gid, event.object.message['reply_message']['conversation_message_id'])
+                        except exceptions.ApiError:
+                            sender(gid, 'Прости, я не могу удалить это сообщение')
                     else:
                         sender(gid, 'а где комманда? вот тебе список, не волнуйся ##тут будет ссылка на html список##')
+                elif msg in forbidden:
+                    try:
+                        eraser(gid, event.object.message['conversation_message_id'])
+                    except exceptions.ApiError:
+                        pass
+                elif keylinks:
+                    if 'https://' in msg or 'http://' in msg or any(list(map(lambda x: x in msg, DOMENS))):
+                        try:
+                            eraser(gid, event.object.message['conversation_message_id'])
+                        except exceptions.ApiError:
+                            pass
                 if msg == 'привет':
                     sender(gid, 'Здарова, заебал')
             elif msg == '!за работу':
