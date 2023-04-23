@@ -1,104 +1,15 @@
-from vk_api import VkApi, exceptions
+from datetime import datetime, timedelta
+
+from vk_api import exceptions
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
-from data import db_session, users, group
 
+from current_group import CurGroup
+from current_user import CurUser
+from tools import *
 
-tok = 'vk1.a.PjWas5ZQVRqq08J7YC8pC_AP6N8Fix4r1WYL48t5Df6B3fc2n8NWnx7AgzsABGYS0a1n-SG0y83sHVcGT0G8WAuUq7ReauMYA79bIN58Q0oI8q0WDBOPaCclOd7JP3YMKf6EV1eH5U0vxasKSGToVrgRVp-7XOjM9_brPN3pGDCeCwrJl_edSM57JKfGkhdNSbMH-ExcQyjnuzNXRgL_gQ'
-vk_session = VkApi(token=tok)
-vk = vk_session.get_api()
 longpoll = VkBotLongPoll(vk_session, 219582896)
 DOMENS = ['.com', '.edu', '.fun', '.gov', '.info', '.net', '.org', '.xxx', '.dev', '.ai', '.au', '.az', '.cz', '.eu',
           '.gg', '.ru', '.рф', '.su']
-
-class CurGroup:
-    def __init__(self, gid):
-        self.gid = gid
-        forbidden = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0]
-        if forbidden is not None:
-            self.forbidden = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0].split(',')
-        else:
-            self.forbidden = []
-        self.greet = db_sess.query(group.Group.greet).filter(group.Group.groupid == gid).first()[0]
-        self.links = db_sess.query(group.Group.links).filter(group.Group.groupid == gid).first()[0]
-
-class CurUser:
-    def __init__(self, uid, gid):
-        self.uid = uid
-        self.gid = gid
-        a = vk.users.get(user_id=uid)[0]
-        self.name = a['first_name']
-        self.sname = a['last_name']
-        self.stat = db_sess.query(users.User.status).filter(users.User.userid == uid, users.User.groupid == gid).first()[0]
-
-
-
-
-
-def sender(id, text):
-    vk_session.method('messages.send', {'chat_id': id, 'message': text, 'random_id': 0})
-
-def eraser(gid, mid):
-    vk_session.method('messages.delete', {'peer_id': 2000000000 + gid, 'delete_for_all': 1, 'cmids': mid, 'random_id': 0})
-
-db_session.global_init("db/users.db")
-db_session.global_init("db/group.db")
-db_sess = db_session.create_session()
-
-def greg(gid, works, keys=None):
-    g = group.Group()
-    g.groupid = gid
-    g.works = works
-    db_sess = db_session.create_session()
-    db_sess.add(g)
-    db_sess.commit()
-
-def grreg(a, gid):
-    db_sess = db_session.create_session()
-    g = db_sess.query(group.Group).filter(group.Group.groupid == gid).first()
-    g.greet = a
-    db_sess.commit()
-
-def ureg(a, gid, status):
-    u = users.User()
-    u.userid = a['id']
-    u.groupid = gid
-    u.surname = a['last_name']
-    u.name = a['first_name']
-    u.status = status
-    db_sess.add(u)
-    db_sess.commit()
-
-def wreg(a, gid):
-    db_sess = db_session.create_session()
-    g = db_sess.query(group.Group).filter(group.Group.groupid == gid).first()
-    g.words = a
-    db_sess.commit()
-
-def streg(gid, uid, a):
-    db_sess = db_session.create_session()
-    u = db_sess.query(users.User).filter(users.User.groupid == gid, users.User.userid == uid).first()
-    u.status = a
-    db_sess.commit()
-
-def lreg(a, gid):
-    db_sess = db_session.create_session()
-    g = db_sess.query(group.Group).filter(group.Group.groupid == gid).first()
-    g.links = a
-    db_sess.commit()
-
-def getadmins(gid):
-    members = vk.messages.getConversationMembers(peer_id=2000000000 + gid)['items']
-    l1 = list()
-    for i in members:
-        try:
-            if i['is_admin']:
-                l1.append(i['member_id'])
-        except KeyError:
-            pass
-        except IndexError:
-            pass
-    return l1
-
 
 for event in longpoll.listen():
     gid = event.chat_id
@@ -127,6 +38,15 @@ for event in longpoll.listen():
                     ans = CurUser(event.object.message['reply_message']['from_id'], gid)
                 except KeyError:
                     ans = False
+                if cru.stat[:3] == 'мут':
+                    dto = datetime.strptime(cru.stat[4:], '%Y-%m-%d %H:%M:%S')
+                    dtn = datetime.now()
+                    print(dto)
+                    print(datetime.now())
+                    if dto <= datetime.now():
+                        streg(gid, cru.uid, 'пользователь')
+                    else:
+                        eraser(gid, event.object.message['conversation_message_id'])
                 if msg[0] == '!' and cru.stat == 'админ':
                     if msg[1:6] == 'админ':
                         if ans is not False:
@@ -134,13 +54,16 @@ for event in longpoll.listen():
                             streg(gid, ans.uid, 'админ')
                             sender(gid, f"{ans.name} {ans.sname} назначен админом")
                         else:
-                            sender(gid, 'Кого назначать-то? Напишите вашу команду в ответ на сообщение этого ответственного господина')
+                            sender(gid,
+                                   'Кого назначать-то? Напишите вашу команду в ответ на сообщение этого ответственного '
+                                   'господина')
                     elif msg[1:4] == 'кик':
                         if ans is not False:
                             if ans.stat == 'админ':
                                 if cru.uid in getadmins(gid):
                                     try:
-                                        db_sess.query(users.User).filter(users.User.userid == ans.uid, users.User.groupid == gid).delete()
+                                        db_sess.query(users.User).filter(users.User.userid == ans.uid,
+                                                                         users.User.groupid == gid).delete()
                                         db_sess.commit()
                                         vk.messages.removeChatUser(chat_id=gid, user_id=ans.uid)
                                         sender(gid, 'Готово, этого парня вы больше не встретите')
@@ -150,7 +73,8 @@ for event in longpoll.listen():
                                     sender(gid, 'Это как вы хотите кикнуть админа?')
                             else:
                                 try:
-                                    db_sess.query(users.User).filter(users.User.userid == ans.uid, users.User.groupid == gid).delete()
+                                    db_sess.query(users.User).filter(users.User.userid == ans.uid,
+                                                                     users.User.groupid == gid).delete()
                                     db_sess.commit()
                                     vk.messages.removeChatUser(chat_id=gid, user_id=ans.uid)
                                     sender(gid, 'Готово, этого парня вы больше не встретите')
@@ -202,13 +126,135 @@ for event in longpoll.listen():
                                 sender(gid, 'Приветственное сообщение изменено')
                             else:
                                 sender(gid, 'Я слишком вежлив, чтобы не здороваться с новичками')
+                        elif msg[6:11] == "преды":
+                            try:
+                                a = int(msg.split(' ')[-1])
+                                if a > 0:
+                                    cpreg(a, gid)
+                                    sender(gid, f'Максимальное количество предупреждений: {a}')
+                                else:
+                                    sender(gid, 'Лучше введите число больше нуля')
+                            except ValueError:
+                                sender(gid, 'Введите чило пожалуйста')
                     elif msg[1:2] == '-':
                         try:
                             eraser(gid, event.object.message['reply_message']['conversation_message_id'])
                         except exceptions.ApiError:
                             sender(gid, 'Прости, я не могу удалить это сообщение')
+                    elif msg[1:4] == 'мут':
+                        if ans is not False:
+                            mes = msg.split(' ')
+                            time = False
+                            print(mes)
+                            if len(mes) == 3:
+                                if 'ч' in mes[-1]:
+                                    time = timedelta(hours=int(mes[1]))
+                                elif 'м' in mes[-1]:
+                                    time = timedelta(minutes=int(mes[1]))
+                                elif 'д' in mes[-1]:
+                                    time = timedelta(days=int(mes[1]))
+                                else:
+                                    sender(gid, 'Уточните время, будьте добры')
+                            else:
+                                sender(gid, 'Можно пожалуйста по подробнее')
+                            if time is False:
+                                pass
+                            else:
+                                streg(gid, ans.uid, f'мут:{(datetime.now() + time).strftime("%Y-%m-%d %H:%M:%S")}')
+                                sender(gid,
+                                       f'{ans.name} {ans.sname} теперь в муте '
+                                       f'до {(datetime.now() + time).strftime("%Y-%m-%d %H:%M:%S")}')
+                        else:
+                            sender(gid, 'Кого мутить-то? Напишите вашу команду в ответ на сообщение этого болтуна')
+                    elif msg[1:6] == 'пред-':
+                        if ans is not False:
+                            if ans.stat == 'админ':
+                                if cru.uid in getadmins(gid):
+                                    try:
+                                        preg(gid, ans.uid, '-')
+                                        if ans.pred > 0:
+                                            sender(gid,
+                                                   f'Предупреждения: {ans.name} {ans.sname} теперь '
+                                                   f'имеет {ans.pred - 1}.')
+                                        else:
+                                            sender(gid, f'Предупреждения: {ans.name} {ans.sname} теперь имеет 0.')
+                                    except exceptions.ApiError:
+                                        sender(gid, 'Меня-то?')
+                                else:
+                                    sender(gid, 'Кто тут кого предупреждает?')
+                            else:
+                                try:
+                                    preg(gid, ans.uid, '-')
+                                    if ans.pred > 0:
+                                        sender(gid,
+                                               f'Предупреждения: {ans.name} {ans.sname} теперь имеет {ans.pred - 1}.')
+                                    else:
+                                        sender(gid, f'Предупреждения: {ans.name} {ans.sname} теперь имеет 0.')
+                                except exceptions.ApiError:
+                                    sender(gid, 'Меня-то?')
+
+                        else:
+                            sender(gid, 'Кого прощать-то? Напишите вашу команду в ответ на сообщение этого бедолагу')
+                    elif msg[1:6] == 'пред+' or msg[1:5] == 'пред':
+                        if ans is not False:
+                            if ans.stat == 'админ':
+                                if cru.uid in getadmins(gid):
+                                    try:
+                                        preg(gid, ans.uid, '+')
+                                        if ans.pred + 1 >= cgr.pred:
+                                            db_sess.query(users.User).filter(users.User.userid == ans.uid,
+                                                                             users.User.groupid == gid).delete()
+                                            db_sess.commit()
+                                            vk.messages.removeChatUser(chat_id=gid, user_id=ans.uid)
+                                            sender(gid, 'Вот, что бывает с нарушителями')
+                                        else:
+                                            sender(gid,
+                                                   f'Предупреждения: {ans.name} {ans.sname} теперь '
+                                                   f'имеет {ans.pred + 1}. \n Если он получит {cgr.pred}, мне '
+                                                   f'придется его выгнать')
+                                    except exceptions.ApiError:
+                                        sender(gid, 'Меня-то?')
+                                else:
+                                    sender(gid, 'Кто тут кого предупреждает?')
+                            else:
+                                try:
+                                    preg(gid, ans.uid, '+')
+                                    print(ans.pred, cgr.pred)
+                                    if ans.pred + 1 >= cgr.pred:
+                                        db_sess.query(users.User).filter(users.User.userid == ans.uid,
+                                                                         users.User.groupid == gid).delete()
+                                        db_sess.commit()
+                                        vk.messages.removeChatUser(chat_id=gid, user_id=ans.uid)
+                                        sender(gid, 'Вот, что бывает с нарушителями')
+                                    else:
+                                        sender(gid,
+                                               f'Предупреждения: {ans.name} {ans.sname} теперь имеет {ans.pred + 1}. \n '
+                                               f'Если он получит {cgr.pred}, мне придется его выгнать')
+                                except exceptions.ApiError:
+                                    sender(gid, 'Меня-то?')
+
+                        else:
+                            sender(gid,
+                                   'Кого предупреждать-то? Напишите вашу команду в ответ на сообщение этого нарушителя')
+                    elif msg[1:7] == 'размут':
+                        if ans is not False:
+                            if ans.stat[:3] == 'мут':
+                                streg(gid, ans.uid, f'пользователь')
+                                sender(gid, f'{ans.name} {ans.sname} больше не в муте')
+                            else:
+                                sender(gid, f'Он и так не из молчеливых')
+                        else:
+                            sender(gid, 'Кого размутить-то? Напишите вашу команду в ответ на сообщение этого молчуна')
+                    elif msg[1:12] == 'всепрощение':
+                        members = vk.messages.getConversationMembers(peer_id=2000000000 + gid)['items']
+                        for i in members:
+                            try:
+                                preg(gid, i['member_id'], 0)
+                            except AttributeError:
+                                pass
+                        sender(gid, 'Все предупреждения сняты')
                     else:
-                        sender(gid, 'а где комманда? вот тебе список, не волнуйся ##тут будет ссылка на html список##')
+                        sender(gid, 'А где комманда? вот тебе список, не волнуйся ##тут будет ссылка на html список##')
                 elif msg[0] == '!' and cru.stat != 'админ':
                     sender(gid, 'А команды могут использовать только админы, дружище')
                 elif msg in forbidden:
@@ -223,26 +269,34 @@ for event in longpoll.listen():
                         except exceptions.ApiError:
                             pass
             elif msg == '!за работу':
-                if db_sess.query(group.Group).filter(group.Group.groupid == str(gid)).first() is None:
-                    greg(gid, True)
-                members = vk.messages.getConversationMembers(peer_id=2000000000 + gid)['items']
-                for i in members:
-                    if i['member_id'] in getadmins(gid):
-                        try:
-                            a = vk.users.get(user_id=i['member_id'])[0]
-                            ureg(a, gid, 'админ')
-                            sender(gid, f"{a['first_name']} {a['last_name']} назначен админом")
-                        except IndexError:
-                            pass
-                    else:
-                        try:
-                            a = vk.users.get(user_id=i['member_id'])[0]
-                            ureg(a, gid, 'пользователь')
-                        except IndexError:
-                            pass
-                sender(gid, 'Регистрация окончена')
+                try:
+                    if db_sess.query(group.Group).filter(
+                            group.Group.groupid == str(gid)).first() is None and -219582896 in getadmins(gid):
+                        greg(gid, True)
+                    members = vk.messages.getConversationMembers(peer_id=2000000000 + gid)['items']
+                    for i in members:
+                        if i['member_id'] in getadmins(gid):
+                            try:
+                                a = vk.users.get(user_id=i['member_id'])[0]
+                                ureg(a, gid, 'админ')
+                                sender(gid, f"{a['first_name']} {a['last_name']} назначен админом")
+                            except IndexError:
+                                pass
+                        else:
+                            try:
+                                a = vk.users.get(user_id=i['member_id'])[0]
+                                ureg(a, gid, 'пользователь')
+                            except IndexError:
+                                pass
+                    sender(gid, 'Регистрация окончена')
+                except exceptions.ApiError:
+                    sender(gid,
+                           'Товарищ, похоже эта беседа не зарегистрирована!\nЧтобы зарегистрировать беседу '
+                           'предоставьте боту права администратора, доступ ко всей переписке и напишите команду '
+                           '"!За работу"')
             elif len(msg) == 0:
                 pass
             else:
-                sender(gid, 'Товарищ, похоже эта беседа не зарегистрирована!\nЧтобы зарегистрировать беседу предоставьте '
-                            'боту права администратора, доступ ко всей переписке и напишите команду "!За работу"')
+                sender(gid,
+                       'Товарищ, похоже эта беседа не зарегистрирована!\nЧтобы зарегистрировать беседу предоставьте '
+                       'боту права администратора, доступ ко всей переписке и напишите команду "!За работу"')
