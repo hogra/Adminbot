@@ -10,6 +10,29 @@ longpoll = VkBotLongPoll(vk_session, 219582896)
 DOMENS = ['.com', '.edu', '.fun', '.gov', '.info', '.net', '.org', '.xxx', '.dev', '.ai', '.au', '.az', '.cz', '.eu',
           '.gg', '.ru', '.рф', '.su']
 
+class CurGroup:
+    def __init__(self, gid):
+        self.gid = gid
+        forbidden = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0]
+        if forbidden is not None:
+            self.forbidden = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0].split(',')
+        else:
+            self.forbidden = []
+        self.greet = db_sess.query(group.Group.greet).filter(group.Group.groupid == gid).first()[0]
+        self.links = db_sess.query(group.Group.links).filter(group.Group.groupid == gid).first()[0]
+
+class CurUser:
+    def __init__(self, uid, gid):
+        self.uid = uid
+        self.gid = gid
+        a = vk.users.get(user_id=uid)[0]
+        self.name = a['first_name']
+        self.sname = a['last_name']
+        self.stat = db_sess.query(users.User.status).filter(users.User.userid == uid, users.User.groupid == gid).first()[0]
+
+
+
+
 
 def sender(id, text):
     vk_session.method('messages.send', {'chat_id': id, 'message': text, 'random_id': 0})
@@ -85,16 +108,13 @@ for event in longpoll.listen():
             a = False
             print(event.object['message'])
             if db_sess.query(group.Group).filter(group.Group.groupid == str(gid)).first() is not None:
-                forbidden = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0]
-                if forbidden is not None:
-                    forbidden = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0].split(',')
-                else:
-                    forbidden = []
-                keylinks = db_sess.query(group.Group.links).filter(group.Group.groupid == gid).first()[0]
+                cgr = CurGroup(gid)
+                forbidden = cgr.forbidden
+                keylinks = cgr.links
                 try:
                     if event.object['message']['action']['type'] == 'chat_invite_user':
                         print(event.object['message'])
-                        sender(gid, db_sess.query(group.Group.greet).filter(group.Group.groupid == gid).first()[0])
+                        sender(gid, cgr.greet)
                         a = vk.users.get(user_id=event.object['message']['action']['member_id'])
                         ureg(a[0], gid, 'пользователь')
                 except TypeError:
@@ -102,49 +122,61 @@ for event in longpoll.listen():
                 except KeyError:
                     pass
             if db_sess.query(group.Group).filter(group.Group.groupid == str(gid)).first() is not None and len(msg) > 0:
-                if msg[0] == '!' and db_sess.query(users.User.status).filter(users.User.userid == event.object.message['from_id'], users.User.groupid == gid).first()[0] == 'админ':
+                cru = CurUser(event.object.message['from_id'], gid)
+                try:
+                    ans = CurUser(event.object.message['reply_message']['from_id'], gid)
+                except KeyError:
+                    ans = False
+                if msg[0] == '!' and cru.stat == 'админ':
                     if msg[1:6] == 'админ':
-                        q = event.object.message
-                        fromid = q['reply_message']['from_id']
-                        streg(gid, fromid, 'админ')
-                        a = vk.users.get(user_id=fromid)[0]
-                        sender(gid, f"{a['first_name']} {a['last_name']} назначен админом")
+                        if ans is not False:
+                            q = event.object.message
+                            streg(gid, ans.uid, 'админ')
+                            sender(gid, f"{ans.name} {ans.sname} назначен админом")
+                        else:
+                            sender(gid, 'Кого назначать-то? Напишите вашу команду в ответ на сообщение этого ответственного господина')
                     elif msg[1:4] == 'кик':
-                        q = event.object.message
-                        if db_sess.query(users.User.status).filter(users.User.userid == q['reply_message']['from_id'], users.User.groupid == gid).first()[0] == 'админ':
-                            print(db_sess.query(users.User.userid).filter(users.User.userid == q['from_id'], users.User.groupid == gid).first()[0])
-                            if db_sess.query(users.User.userid).filter(users.User.userid == q['from_id'], users.User.groupid == gid).first()[0] in getadmins(gid):
+                        if ans is not False:
+                            if ans.stat == 'админ':
+                                if cru.uid in getadmins(gid):
+                                    try:
+                                        db_sess.query(users.User).filter(users.User.userid == ans.uid, users.User.groupid == gid).delete()
+                                        db_sess.commit()
+                                        vk.messages.removeChatUser(chat_id=gid, user_id=ans.uid)
+                                        sender(gid, 'Готово, этого парня вы больше не встретите')
+                                    except exceptions.ApiError:
+                                        sender(gid, 'Хара-кири?')
+                                else:
+                                    sender(gid, 'Это как вы хотите кикнуть админа?')
+                            else:
                                 try:
-                                    db_sess.query(users.User).filter(users.User.userid == q['reply_message']['from_id'], users.User.groupid == gid).delete()
+                                    db_sess.query(users.User).filter(users.User.userid == ans.uid, users.User.groupid == gid).delete()
                                     db_sess.commit()
-                                    vk.messages.removeChatUser(chat_id=gid, user_id=q['reply_message']['from_id'])
+                                    vk.messages.removeChatUser(chat_id=gid, user_id=ans.uid)
                                     sender(gid, 'Готово, этого парня вы больше не встретите')
                                 except exceptions.ApiError:
                                     sender(gid, 'Хара-кири?')
-                            else:
-                                sender(gid, 'Это как вы хотите кикнуть админа?')
                         else:
-                            try:
-                                db_sess.query(users.User).filter(users.User.userid == q['reply_message']['from_id'], users.User.groupid == gid).delete()
-                                db_sess.commit()
-                                vk.messages.removeChatUser(chat_id=gid, user_id=q['reply_message']['from_id'])
-                                sender(gid, 'Готово, этого парня вы больше не встретите')
-                            except exceptions.ApiError:
-                                sender(gid, 'Хара-кири?')
+                            sender(gid, 'Кого кикать-то? Напишите вашу команду в ответ на сообщение этого негодяя')
                     elif msg[1:6] == 'снять':
-                        q = event.object.message
-                        fromid = q['reply_message']['from_id']
-                        streg(gid, fromid, 'пользователь')
-                        a = vk.users.get(user_id=fromid)[0]
-                        sender(gid, f"{a['first_name']} {a['last_name']} больше не админ")
+                        if ans is not False:
+                            if ans.stat == 'админ':
+                                if cru.uid in getadmins(gid):
+                                    streg(gid, ans.uid, 'пользователь')
+                                    sender(gid, f"{ans.name} {ans.sname} больше не админ")
+                                else:
+                                    sender(gid, 'Разбирайтесь со своими проблемами сами, или позовите главного админа')
+                            else:
+                                sender(gid, f"Куда ему падать еще ниже?")
+                        else:
+                            sender(gid, 'Кого снимать-то? Напишите вашу команду в ответ на сообщение провинившегося')
                     elif msg[1:10] == 'за работу':
                         sender(gid, 'Не стройте из себя дурака, у меня уже есть ваша карточка!')
                     elif msg[1:5] == 'ключ':
                         if msg[6:11] == 'слово':
                             word = msg[11:].replace(' ', '')
-                            lst = db_sess.query(group.Group.words).filter(group.Group.groupid == gid).first()[0]
-                            if lst is not None:
-                                lst = lst.split(',')
+                            lst = forbidden
+                            if len(lst) > 0:
                                 if word in lst:
                                     lst.remove(word)
                                     sender(gid, f'Я убрал слово {word} из списка запрещенных слов')
@@ -177,42 +209,37 @@ for event in longpoll.listen():
                             sender(gid, 'Прости, я не могу удалить это сообщение')
                     else:
                         sender(gid, 'а где комманда? вот тебе список, не волнуйся ##тут будет ссылка на html список##')
-                elif msg[0] == '!' and db_sess.query(users.User.status).filter(users.User.userid == event.object.message['from_id'], users.User.groupid == gid).first()[0] == 'админ':
+                elif msg[0] == '!' and cru.stat != 'админ':
                     sender(gid, 'А команды могут использовать только админы, дружище')
                 elif msg in forbidden:
                     try:
                         eraser(gid, event.object.message['conversation_message_id'])
                     except exceptions.ApiError:
                         pass
-                elif keylinks:
+                elif keylinks == 1:
                     if 'https://' in msg or 'http://' in msg or any(list(map(lambda x: x in msg, DOMENS))):
                         try:
                             eraser(gid, event.object.message['conversation_message_id'])
                         except exceptions.ApiError:
                             pass
-                if msg == 'привет':
-                    sender(gid, 'Здарова, заебал')
             elif msg == '!за работу':
                 if db_sess.query(group.Group).filter(group.Group.groupid == str(gid)).first() is None:
                     greg(gid, True)
                 members = vk.messages.getConversationMembers(peer_id=2000000000 + gid)['items']
-                print(members)
-                for i in getadmins(gid):
-                    try:
-                        a = vk.users.get(user_id=i)[0]
-                        ureg(a, gid, 'админ')
-                        sender(gid, f"{a['first_name']} {a['last_name']} назначен админом")
-                    except IndexError:
-                        pass
                 for i in members:
-                    try:
-                        a = vk.users.get(user_id=i['member_id'])[0]
-                        print(a)
-                        print(getadmins(gid))
-                        if a['id'] not in getadmins(gid):
+                    if i['member_id'] in getadmins(gid):
+                        try:
+                            a = vk.users.get(user_id=i['member_id'])[0]
+                            ureg(a, gid, 'админ')
+                            sender(gid, f"{a['first_name']} {a['last_name']} назначен админом")
+                        except IndexError:
+                            pass
+                    else:
+                        try:
+                            a = vk.users.get(user_id=i['member_id'])[0]
                             ureg(a, gid, 'пользователь')
-                    except IndexError:
-                        pass
+                        except IndexError:
+                            pass
                 sender(gid, 'Регистрация окончена')
             elif len(msg) == 0:
                 pass
