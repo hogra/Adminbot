@@ -15,5 +15,7 @@ class User(SqlAlchemyBase):
     surname = sqlalchemy.Column(sqlalchemy.String, nullable=True)
     name = sqlalchemy.Column(sqlalchemy.String, nullable=True)
     status = sqlalchemy.Column(sqlalchemy.String, nullable=True)
+    symbols = sqlalchemy.Column(sqlalchemy.Integer, default=0, nullable=True)
+    date = sqlalchemy.Column(sqlalchemy.String, nullable=True)
     pred = sqlalchemy.Column(sqlalchemy.Integer, default=0, nullable=True)
     group = orm.relationship("Group", back_populates='user')

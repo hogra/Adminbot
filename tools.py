@@ -3,6 +3,7 @@ from vk_api import VkApi
 from data import db_session
 from data import group
 from data import users
+from datetime import datetime
 
 TOK = 'vk1.a.PjWas5ZQVRqq08J7YC8pC_AP6N8Fix4r1WYL48t5Df6B3fc2n8NWnx7AgzsABGYS0a1n-SG0y83sHVcGT0G8WAuUq7ReauMYA79bIN58Q0oI8q0WDBOPaCclOd7JP3YMKf6EV1eH5U0vxasKSGToVrgRVp-7XOjM9_brPN3pGDCeCwrJl_edSM57JKfGkhdNSbMH-ExcQyjnuzNXRgL_gQ'
 vk_session = VkApi(token=TOK)
@@ -65,6 +66,7 @@ def ureg(a, gid, status): # Регистрация участника
     u.groupid = gid
     u.surname = a['last_name']
     u.name = a['first_name']
+    u.date = (datetime.now()).strftime("%d.%m.%Y")
     u.status = status
     db_sess.add(u)
     db_sess.commit()
@@ -91,6 +93,14 @@ def lreg(a, gid): # Регистрация флага ссылок
     g = db_sess.query(group.Group).filter(group.Group.groupid == gid).first()
     g.links = a
     db_sess.commit()
+
+def ssyms(gid, uid, n):
+    db_sess = db_session.create_session()
+    u = db_sess.query(users.User).filter(users.User.groupid == gid, users.User.userid == uid).first()
+    u.symbols += n
+    db_sess.commit()
+
+
 
 
 def getadmins(gid): # Получение всех организаторов чата

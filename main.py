@@ -38,13 +38,18 @@ for event in VkBotLongPoll(vk_session, 219582896).listen(): # Бот отсле�
                 # Если сообщение является текстом:
                 cru = CurUser(event.object.message['from_id'], gid) # Сохраняю параметры отправителя (того, кто пишет)
                 print(f'    Новое сообщение от пользователя {cru.name} {cru.sname}: {msg}')
+                ssyms(gid, cru.uid, len(msg))
                 try:
                     ans = CurUser(event.object.message['reply_message']['from_id'], gid)
-                    # И сохраняю параметры получателя (того, кому пишут), если таковой имеется
+                    if ans.uid == cru.uid:
+                        ans = False
                 except KeyError:
                     ans = False # Иначе - не сохраняю
+                except IndexError:
+                    ans = False
+
                 if cru.stat[:3] == 'мут': # Если отправитель в муте
-                    if datetime.strptime(cru.stat[4:], '%Y-%m-%d %H:%M:%S') <= datetime.now(): # Если время мута истекло
+                    if datetime.strptime(cru.stat[4:], '%d.%m.%Y %H:%M:%S') <= datetime.now(): # Если время мута истекло
                         streg(gid, cru.uid, 'пользователь')  # Отправителю снова присваивается статус "пользователь"
                         print(f'    Срок мута пользователя {cru.name, cru.sname} окончен')
                     else: # Если не истекло
@@ -126,7 +131,7 @@ for event in VkBotLongPoll(vk_session, 219582896).listen(): # Бот отсле�
                         elif msg[6:17] == 'приветствие': # Приветственное сообщение
                             a = msg[18:]
                             if a != '':
-                                grreg(a, gid)
+                                grreg(a.capitalize(), gid)
                                 sender(gid, 'Приветственное сообщение изменено')
                             else:
                                 sender(gid, 'Я слишком вежлив, чтобы не здороваться с новичками')
@@ -139,17 +144,19 @@ for event in VkBotLongPoll(vk_session, 219582896).listen(): # Бот отсле�
                                 else:
                                     sender(gid, 'Лучше введите число больше нуля')
                             except ValueError:
-                                sender(gid, 'Введите чило пожалуйста')
+                                sender(gid, 'Введите чило, пожалуйста')
+                        else:
+                            sender(gid, 'Вы не ввели ключ, о ключах прочитайте здесь\nvk.com/@-219582896-komandy-bota-tovarisch-admin')
                     elif msg[1:2] == '-': # Обратно к командам - удаление сообщения
                         try:
                             eraser(gid, event.object.message['reply_message']['conversation_message_id'])
                         except exceptions.ApiError:
                             sender(gid, 'Прости, я не могу удалить это сообщение')
                     elif msg[1:4] == 'мут': # Мут
-                        if ans is not False: # Мут и его время ставится в статус, как он работает описывалось выше
+                        if ans is not False and ans.uid not in getadmins(gid):
+                            # Мут и его время ставится в статус, как он работает описывалось выше
                             mes = msg.split(' ')
                             time = False
-                            print(mes)
                             if len(mes) == 3:
                                 if 'ч' in mes[-1]:
                                     time = timedelta(hours=int(mes[1])) # Можно дать мут на часы
@@ -164,10 +171,10 @@ for event in VkBotLongPoll(vk_session, 219582896).listen(): # Бот отсле�
                             if time is False:
                                 pass
                             else:
-                                streg(gid, ans.uid, f'мут:{(datetime.now() + time).strftime("%Y-%m-%d %H:%M:%S")}')
+                                streg(gid, ans.uid, f'мут:{(datetime.now() + time).strftime("%d.%m.%Y %H:%M:%S")}')
                                 sender(gid,
                                        f'{ans.name} {ans.sname} теперь в муте '
-                                       f'до {(datetime.now() + time).strftime("%Y-%m-%d %H:%M:%S")}')
+                                       f'до {(datetime.now() + time).strftime("%d.%m.%Y %H:%M:%S")}')
                         else:
                             sender(gid, 'Кого мутить-то? Напишите вашу команду в ответ на сообщение этого болтуна')
                     elif msg[1:6] == 'пред-': # Преды. Преды можно снимать
@@ -217,7 +224,7 @@ for event in VkBotLongPoll(vk_session, 219582896).listen(): # Бот отсле�
                                         else:
                                             sender(gid,
                                                    f'Предупреждения: {ans.name} {ans.sname} теперь '
-                                                   f'имеет {ans.pred + 1}. \n Если он получит {cgr.pred}, мне '
+                                                   f'имеет {ans.pred + 1}. \nЕсли он получит {cgr.pred}, мне '
                                                    f'придется его выгнать')
                                     except exceptions.ApiError:
                                         sender(gid, 'Меня-то?')
@@ -238,7 +245,7 @@ for event in VkBotLongPoll(vk_session, 219582896).listen(): # Бот отсле�
                                     else:
                                         sender(gid,
                                                f'Предупреждения: {ans.name} {ans.sname} '
-                                               f'теперь имеет {ans.pred + 1}. \n Если он получит {cgr.pred}, '
+                                               f'теперь имеет {ans.pred + 1}. \nЕсли он получит {cgr.pred}, '
                                                f'мне придется его выгнать')
                                 except exceptions.ApiError:
                                     sender(gid, 'Меня-то?')
@@ -264,7 +271,8 @@ for event in VkBotLongPoll(vk_session, 219582896).listen(): # Бот отсле�
                                 pass
                         sender(gid, 'Все предупреждения сняты')
                     else: # Если пользователь ввел команду, которой не существует, бот направит его в список команд
-                        sender(gid, 'А где комманда? вот тебе список, не волнуйся ##тут будет ссылка на html список##')
+                        if msg[1:5] != 'стат' and msg[1:4] != 'топ' and msg[1:5] != 'даты':
+                            sender(gid, 'А где комманда? вот тебе список, не волнуйся\nvk.com/@-219582896-komandy-bota-tovarisch-admin')
                 elif msg[0] == '!' and cru.stat != 'админ':
                     sender(gid, 'А команды могут использовать только админы, дружище')
                 elif msg in forbidden and cru.stat != 'админ': # Если в сообщении есть запрещенное слово
@@ -283,6 +291,42 @@ for event in VkBotLongPoll(vk_session, 219582896).listen(): # Бот отсле�
                             eraser(gid, event.object.message['conversation_message_id'])
                         except exceptions.ApiError:
                             pass
+                if msg[:5] == '!стат':
+                    if ans is not False:
+                        try:
+                            sender(gid, f'Досье\nИмя: {ans.name}\nФамилия: {ans.sname}\nСимволов: {ans.sym}\n'
+                                        f'Статус: {ans.stat}\nПредупреждений: {ans.pred}\n Находится в чате с {ans.date}\n'
+                                        f'Характер скверный, не женат')
+                        except IndexError:
+                            sender(gid, f'А свою карточку я вам не покажу')
+                    else:
+                        sender(gid, f'Досье\nИмя: {cru.name}\nФамилия: {cru.sname}\nСимволов: {cru.sym}\n'
+                                    f'Статус: {cru.stat}\nПредупреждений: {cru.pred}\n Находится в чате с {cru.date}\n'
+                                    f'Характер скверный, не женат')
+                    print(cru.sym)
+                elif msg[:4] == '!топ':
+                    top = db_sess.query(users.User.name, users.User.surname, users.User.symbols).filter(users.User.groupid == gid).all()
+                    top.sort(key=lambda x: x[2], reverse=True)
+                    s = 'Топ участников по символам\n'
+                    if len(top) >= 10:
+                        for i in top[:10]:
+                            s += f'{i[0]} {i[1]}: {i[2]} символов\n'
+                    else:
+                        for i in top:
+                            s += f'{i[0]} {i[1]}: {i[2]} символов\n'
+                    sender(gid, s)
+                elif msg[:5] == '!даты':
+                    top = db_sess.query(users.User.name, users.User.surname, users.User.date).filter(users.User.groupid == gid).all()
+                    top.sort(key=lambda x: datetime.strptime(x[2], '%d.%m.%Y'), reverse=True)
+                    s = 'Топ участников по датам\n'
+                    if len(top) >= 30:
+                        for i in top[:30]:
+                            s += f'{i[0]} {i[1]}: {i[2]}\n'
+                    else:
+                        for i in top:
+                            s += f'{i[0]} {i[1]}: {i[2]}\n'
+
+                    sender(gid, s)
             elif msg == '!за работу': # Если чата нет в базе данных, его нужно ввести этой командой
                 try:
                     if db_sess.query(group.Group).filter(
