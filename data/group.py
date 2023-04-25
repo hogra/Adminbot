@@ -3,6 +3,7 @@ import sqlalchemy.orm as orm
 
 from .db_session import SqlAlchemyBase
 
+# Таблица чатов в бд
 
 class Group(SqlAlchemyBase):
     __tablename__ = 'group'

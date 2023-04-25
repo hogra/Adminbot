@@ -1,5 +1,6 @@
 from tools import db_sess, group
 
+# Класс чата
 
 class CurGroup:
     def __init__(self, gid):

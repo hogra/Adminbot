@@ -1,5 +1,6 @@
 from tools import vk, db_sess, users
 
+# Класс пользователя
 
 class CurUser:
     def __init__(self, uid, gid):
